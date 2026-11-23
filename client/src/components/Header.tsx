@@ -7,7 +7,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663456826156/TMzedUsdYX9avxmxUtYLZa/tucano-logo_1bed142e.jpg";
+const LOGO_URL = "/images/tucano-logo_1bed142e.jpg";
 
 export default function Header() {
   const { user, isAuthenticated } = useAuth();

@@ -4,7 +4,7 @@ import ProductCard from "@/components/ProductCard";
 import { ChevronRight, Truck, Clock, Star, Shield, MapPin, Phone, AlertCircle } from "lucide-react";
 import { isStoreOpen, getStoreStatusMessage, STORE_INFO } from "@/lib/storeHours";
 
-const LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663456826156/TMzedUsdYX9avxmxUtYLZa/tucano-logo_1bed142e.jpg";
+const LOGO_URL = "/images/tucano-logo_1bed142e.jpg";
 
 const FEATURES = [
   { icon: Truck, title: "Entrega Rápida", desc: "Em até 45 min em Bauru" },
