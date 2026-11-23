@@ -9,6 +9,7 @@ import {
   User, Package, Gift, Star, ChevronRight, Clock,
   CheckCircle, Truck, ChefHat, XCircle, MapPin, Phone
 } from "lucide-react";
+import { formatBRL } from "@shared/format";
 
 const STATUS_CONFIG = {
   recebido: { label: "Recebido", icon: Clock, color: "text-blue-600 bg-blue-50", step: 1 },
@@ -98,7 +99,7 @@ function OrderDetail({ orderId }: { orderId: number }) {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <span>R$ {parseFloat(item.itemTotal).toFixed(2)}</span>
+                <span>{formatBRL(item.itemTotal)}</span>
                 {order.status === "entregue" && (
                   <button
                     onClick={() => setReviewProductId(item.productId)}
@@ -113,26 +114,38 @@ function OrderDetail({ orderId }: { orderId: number }) {
         </div>
         <div className="border-t border-border mt-3 pt-3 flex flex-col gap-1 text-sm">
           <div className="flex justify-between text-muted-foreground">
-            <span>Subtotal</span><span>R$ {parseFloat(order.subtotal).toFixed(2)}</span>
+            <span>Subtotal</span><span>{formatBRL(order.subtotal)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
-            <span>Entrega</span><span>R$ {parseFloat(order.deliveryFee).toFixed(2)}</span>
+            <span>{parseFloat(order.deliveryFee) === 0 ? "Retirada na loja" : "Entrega"}</span>
+            <span>{parseFloat(order.deliveryFee) === 0 ? "Grátis" : formatBRL(order.deliveryFee)}</span>
           </div>
           {parseFloat(order.discount) > 0 && (
             <div className="flex justify-between text-green-600 font-semibold">
-              <span>Desconto</span><span>-R$ {parseFloat(order.discount).toFixed(2)}</span>
+              <span>Desconto</span><span>-{formatBRL(order.discount)}</span>
             </div>
           )}
           <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
-            <span>Total</span><span className="text-primary">R$ {parseFloat(order.total).toFixed(2)}</span>
+            <span>Total</span><span className="text-primary">{formatBRL(order.total)}</span>
           </div>
         </div>
       </div>
 
-      {addr && (
+      {addr ? (
         <div className="bg-card border border-border rounded-2xl p-4 text-sm">
           <p className="font-semibold flex items-center gap-1 mb-1"><MapPin className="w-4 h-4 text-primary" /> Endereço de Entrega</p>
           <p className="text-muted-foreground">{addr.street}, {addr.number} — {addr.neighborhood}, {addr.city}</p>
+        </div>
+      ) : parseFloat(order.deliveryFee) === 0 ? (
+        <div className="bg-card border border-border rounded-2xl p-4 text-sm">
+          <p className="font-semibold">Retirada na loja</p>
+        </div>
+      ) : null}
+
+      {order.notes && (
+        <div className="bg-card border border-border rounded-2xl p-4 text-sm">
+          <p className="font-semibold mb-1">Detalhes do pedido</p>
+          <p className="text-muted-foreground whitespace-pre-line">{order.notes}</p>
         </div>
       )}
 
@@ -332,7 +345,7 @@ export default function MyAccount() {
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full mt-1 inline-block ${cfg?.color}`}>{cfg?.label}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-primary">R$ {parseFloat(order.total).toFixed(2)}</span>
+                        <span className="font-bold text-primary">{formatBRL(order.total)}</span>
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </div>
                     </button>
@@ -347,7 +360,7 @@ export default function MyAccount() {
               <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white">
                 <p className="text-sm font-semibold opacity-80 mb-1">Seus pontos</p>
                 <p className="font-display text-5xl font-bold">{user?.loyaltyPoints ?? 0}</p>
-                <p className="text-sm opacity-80 mt-1">= R$ {((user?.loyaltyPoints ?? 0) * POINTS_TO_BRL).toFixed(2)} em descontos</p>
+                <p className="text-sm opacity-80 mt-1">= {formatBRL((user?.loyaltyPoints ?? 0) * POINTS_TO_BRL)} em descontos</p>
                 <div className="mt-4 bg-white/20 rounded-xl p-3 text-sm">
                   <p>🎯 Ganhe 1 ponto por cada R$1 em pedidos</p>
                   <p>💰 100 pontos = R$5 de desconto</p>

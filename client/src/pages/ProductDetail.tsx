@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Star, ArrowLeft, Plus, Minus, ShoppingCart } from "lucide-react";
+import { formatBRL } from "@shared/format";
 
 const PLACEHOLDER = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=600&fit=crop";
 
@@ -165,7 +166,7 @@ export default function ProductDetail() {
           )}
 
           <div className="text-3xl font-display font-bold text-primary">
-            R$ {parseFloat(product.price).toFixed(2)}
+            {formatBRL(product.price)}
           </div>
 
           {/* Extras */}
@@ -191,7 +192,7 @@ export default function ProductDetail() {
                       />
                       <span className="text-sm font-medium">{extra.name}</span>
                     </div>
-                    <span className="text-sm text-primary font-semibold">+R$ {extra.price.toFixed(2)}</span>
+                    <span className="text-sm text-primary font-semibold">+{formatBRL(extra.price)}</span>
                   </label>
                 ))}
               </div>
@@ -236,7 +237,7 @@ export default function ProductDetail() {
               className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl text-base flex items-center justify-center gap-2"
             >
               <ShoppingCart className="w-5 h-5" />
-              {addToCart.isPending ? "Adicionando..." : `Adicionar ao Carrinho • R$ ${totalPrice.toFixed(2)}`}
+              {addToCart.isPending ? "Adicionando..." : `Adicionar ao Carrinho • ${formatBRL(totalPrice)}`}
             </Button>
           </div>
         </div>

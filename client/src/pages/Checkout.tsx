@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { MapPin, CreditCard, Banknote, MessageCircle, Tag, Gift, Plus, Check, AlertCircle, Clock } from "lucide-react";
-import { isStoreOpen, getStoreStatusMessage } from "@/lib/storeHours";
+import { MapPin, CreditCard, Banknote, MessageCircle, Tag, Gift, Plus, Check, AlertCircle, Clock, Store, Copy } from "lucide-react";
+import { isStoreOpen, getStoreStatusMessage, STORE_INFO, DELIVERY_FEE } from "@/lib/storeHours";
+import { formatBRL, formatPhoneBR, phoneDigits } from "@shared/format";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const DELIVERY_FEE = 5.0;
 const POINTS_TO_BRL = 0.05; // 100 pts = R$5
 
 type PaymentMethod = "pix_whatsapp" | "cartao" | "dinheiro";
@@ -54,6 +54,10 @@ export default function Checkout() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
   const [usePoints, setUsePoints] = useState(0);
   const [notes, setNotes] = useState("");
+  const [fulfillment, setFulfillment] = useState<"entrega" | "retirada">("entrega");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [cashChange, setCashChange] = useState("");
   const [newAddressOpen, setNewAddressOpen] = useState(false);
   const [newAddr, setNewAddr] = useState({
     label: "Casa",
@@ -69,10 +73,22 @@ export default function Checkout() {
     enabled: isAuthenticated,
   });
 
+  useEffect(() => {
+    if (!user) return;
+    setCustomerName((current) => current || user.name || "");
+    setCustomerPhone((current) => current || user.phone || "");
+  }, [user]);
+
+  useEffect(() => {
+    if (selectedAddressId || addresses.length === 0) return;
+    const preferred = addresses.find((addr) => addr.isDefault) ?? addresses[0];
+    if (preferred) setSelectedAddressId(preferred.id);
+  }, [addresses, selectedAddressId]);
+
   const validateCoupon = trpc.coupon.validate.useMutation({
     onSuccess: (data) => {
       setAppliedCoupon({ code: couponCode.toUpperCase(), discount: data.discount });
-      toast.success(`Cupom aplicado! Desconto de R$ ${data.discount.toFixed(2)}`);
+      toast.success(`Cupom aplicado! Desconto de ${formatBRL(data.discount)}`);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -104,7 +120,8 @@ export default function Checkout() {
 
       const itensStr = data.items
         .map((i) => {
-          let linha = `  • ${i.quantity}x ${i.productName} — R$ ${parseFloat(i.itemTotal).toFixed(2)}`;
+          const numero = i.menuNumber ? `#${i.menuNumber} ` : "";
+          let linha = `  • ${i.quantity}x ${numero}${i.productName} — ${formatBRL(i.itemTotal)}`;
           if (i.observations) linha += `\n    Obs: ${i.observations}`;
           return linha;
         })
@@ -112,20 +129,36 @@ export default function Checkout() {
 
       const descontoStr =
         parseFloat(data.discount) > 0
-          ? `\nDesconto: -R$ ${parseFloat(data.discount).toFixed(2)}`
+          ? `\nDesconto: -${formatBRL(data.discount)}`
           : "";
 
-      const obsStr = data.notes ? `\n\n\uD83D\uDCDD Observa\u00e7\u00f5es: ${data.notes}` : "";
+      const entregaStr =
+        data.fulfillment === "retirada"
+          ? `*Retirada na loja:* ${STORE_INFO.streetLine}, ${STORE_INFO.neighborhoodLine}`
+          : `*Endereço:* ${enderecoStr}`;
+
+      const trocoStr =
+        data.paymentMethod === "dinheiro"
+          ? data.cashChange
+            ? `\n*Troco para:* ${formatBRL(data.cashChange)} (devolver ${formatBRL(data.cashChange - parseFloat(data.total))})`
+            : "\n*Troco:* valor exato"
+          : "";
+
+      const obsStr = data.notes ? `\n\n📝 Observações: ${data.notes}` : "";
 
       const msg =
-        `\uD83C\uDF54 *NOVO PEDIDO #${data.orderId} — Pantanal Lanches*\n\n` +
+        `🍔 *NOVO PEDIDO #${data.orderId} — Pantanal Lanches*\n\n` +
+        `*Cliente:* ${data.customerName}\n` +
+        `*Telefone:* ${data.customerPhone}\n` +
+        `*Tipo:* ${data.fulfillment === "retirada" ? "Retirada na loja" : "Entrega"}\n\n` +
         `*Itens:*\n${itensStr}\n\n` +
-        `*Subtotal:* R$ ${parseFloat(data.subtotal).toFixed(2)}\n` +
-        `*Taxa de entrega:* R$ ${parseFloat(data.deliveryFee).toFixed(2)}` +
+        `*Subtotal:* ${formatBRL(data.subtotal)}\n` +
+        `*Taxa de entrega:* ${parseFloat(data.deliveryFee) === 0 ? "Grátis" : formatBRL(data.deliveryFee)}` +
         descontoStr +
-        `\n*TOTAL: R$ ${parseFloat(data.total).toFixed(2)}*\n\n` +
-        `*Pagamento:* ${paymentLabels[data.paymentMethod] ?? data.paymentMethod}\n` +
-        `*Endere\u00e7o:* ${enderecoStr}` +
+        `\n*TOTAL: ${formatBRL(data.total)}*\n\n` +
+        `*Pagamento:* ${paymentLabels[data.paymentMethod] ?? data.paymentMethod}` +
+        trocoStr +
+        `\n${entregaStr}` +
         obsStr;
 
       const whatsappUrl = `https://wa.me/5514997779977?text=${encodeURIComponent(msg)}`;
@@ -149,27 +182,44 @@ export default function Checkout() {
     return sum + (price + extrasTotal) * item.quantity;
   }, 0);
 
+  const deliveryFee = fulfillment === "retirada" ? 0 : DELIVERY_FEE;
   const maxPointsToUse = Math.min(user?.loyaltyPoints ?? 0, Math.floor(subtotal / POINTS_TO_BRL));
   const pointsDiscount = usePoints * POINTS_TO_BRL;
   const couponDiscount = appliedCoupon?.discount ?? 0;
   const totalDiscount = couponDiscount + pointsDiscount;
-  const total = Math.max(0, subtotal + DELIVERY_FEE - totalDiscount);
+  const total = Math.max(0, subtotal + deliveryFee - totalDiscount);
+  const cashChangeValue = cashChange.trim() === "" ? undefined : Number(cashChange.replace(",", "."));
+  const contactReady = customerName.trim().length >= 2 && phoneDigits(customerPhone).length >= 10 && phoneDigits(customerPhone).length <= 11;
+  const needsAddress = fulfillment === "entrega" && !selectedAddressId;
+  const cashInvalid = paymentMethod === "dinheiro" && cashChangeValue != null && (!Number.isFinite(cashChangeValue) || cashChangeValue + 0.001 < total);
 
   const handleSubmit = () => {
     if (!storeOpen) {
-      toast.error("A loja está fechada no momento. Funcionamos de terça a domingo, das 19h às 23h.");
+      toast.error(`${getStoreStatusMessage()}. Funcionamos de terça a domingo, das 19h às 23h.`);
       return;
     }
-    if (!selectedAddressId && addresses.length > 0) {
-      toast.error("Selecione um endereço de entrega");
+    if (!contactReady) {
+      toast.error("Informe seu nome e um telefone com DDD.");
+      return;
+    }
+    if (needsAddress) {
+      toast.error("Cadastre e selecione um endereço de entrega.");
+      return;
+    }
+    if (cashInvalid) {
+      toast.error(`O valor para troco precisa ser maior ou igual ao total de ${formatBRL(total)}.`);
       return;
     }
     createOrder.mutate({
       paymentMethod,
-      addressId: selectedAddressId,
+      fulfillment,
+      addressId: fulfillment === "entrega" ? selectedAddressId : undefined,
       couponCode: appliedCoupon?.code,
       notes: notes || undefined,
       usePoints,
+      customerName: customerName.trim(),
+      customerPhone: formatPhoneBR(customerPhone),
+      cashChange: paymentMethod === "dinheiro" ? cashChangeValue : undefined,
     });
   };
 
@@ -203,12 +253,12 @@ export default function Checkout() {
                 0
               );
               return (
-                <div key={item.id} className="flex justify-between text-sm">
+                <div key={item.id} className="flex justify-between text-sm gap-3">
                   <span className="text-foreground/80">
-                    {item.quantity}x {item.product?.name}
+                    {item.quantity}x {item.product?.menuNumber ? `#${item.product.menuNumber} ` : ""}{item.product?.name}
                   </span>
-                  <span className="font-semibold">
-                    R$ {((price + extrasTotal) * item.quantity).toFixed(2)}
+                  <span className="font-semibold shrink-0">
+                    {formatBRL((price + extrasTotal) * item.quantity)}
                   </span>
                 </div>
               );
@@ -217,31 +267,91 @@ export default function Checkout() {
           <div className="border-t border-border pt-3 flex flex-col gap-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>R$ {subtotal.toFixed(2)}</span>
+              <span>{formatBRL(subtotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Taxa de entrega</span>
-              <span>R$ {DELIVERY_FEE.toFixed(2)}</span>
+              <span className="text-muted-foreground">{fulfillment === "retirada" ? "Retirada na loja" : "Taxa de entrega"}</span>
+              <span>{deliveryFee === 0 ? "Grátis" : formatBRL(deliveryFee)}</span>
             </div>
             {totalDiscount > 0 && (
               <div className="flex justify-between text-green-600 font-semibold">
                 <span>Desconto</span>
-                <span>-R$ {totalDiscount.toFixed(2)}</span>
+                <span>-{formatBRL(totalDiscount)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-base pt-2 border-t border-border">
               <span>Total</span>
-              <span className="text-primary">R$ {total.toFixed(2)}</span>
+              <span className="text-primary">{formatBRL(total)}</span>
             </div>
           </div>
         </section>
 
-        {/* ── Endereço de Entrega ── */}
+        {/* ── Contato ── */}
         <section className="bg-card border border-border rounded-2xl p-5">
+          <h2 className="font-display text-lg mb-3">Seus dados</h2>
+          <p className="text-sm text-muted-foreground mb-4">O nome e o telefone vão na mensagem do pedido para a loja conseguir falar com você.</p>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Nome</label>
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Seu nome"
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Telefone</label>
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                placeholder="(14) 99999-9999"
+                className="w-full px-3 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Entrega ou retirada ── */}
+        <section className="bg-card border border-border rounded-2xl p-5">
+          <h2 className="font-display text-lg mb-4">Como você quer receber</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => setFulfillment("entrega")}
+              className={`text-left p-4 rounded-xl border transition-colors ${
+                fulfillment === "entrega" ? "border-primary bg-primary/5" : "border-border hover:bg-secondary"
+              }`}
+            >
+              <p className="font-semibold text-sm flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" /> Entrega</p>
+              <p className="text-xs text-muted-foreground mt-1">Taxa de {formatBRL(DELIVERY_FEE)}</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFulfillment("retirada")}
+              className={`text-left p-4 rounded-xl border transition-colors ${
+                fulfillment === "retirada" ? "border-primary bg-primary/5" : "border-border hover:bg-secondary"
+              }`}
+            >
+              <p className="font-semibold text-sm flex items-center gap-2"><Store className="w-4 h-4 text-primary" /> Retirar na loja</p>
+              <p className="text-xs text-muted-foreground mt-1">Sem taxa de entrega</p>
+            </button>
+          </div>
+
+          {fulfillment === "retirada" ? (
+            <div className="p-3 bg-secondary rounded-xl text-sm">
+              <p className="font-semibold">Retirada em</p>
+              <p className="text-muted-foreground">{STORE_INFO.streetLine}</p>
+              <p className="text-muted-foreground">{STORE_INFO.neighborhoodLine}</p>
+            </div>
+          ) : (
+          <>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-lg flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-primary" /> Endereço de Entrega
-            </h2>
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-primary" /> Endereço de entrega
+            </h3>
             <Dialog open={newAddressOpen} onOpenChange={setNewAddressOpen}>
               <DialogTrigger asChild>
                 <button className="text-sm text-primary font-semibold flex items-center gap-1 hover:underline">
@@ -289,8 +399,8 @@ export default function Checkout() {
           </div>
 
           {addresses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhum endereço cadastrado. Clique em "Novo" para adicionar.
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              Cadastre um endereço para conseguir confirmar a entrega.
             </p>
           ) : (
             <div className="flex flex-col gap-3">
@@ -321,6 +431,8 @@ export default function Checkout() {
                 </label>
               ))}
             </div>
+          )}
+          </>
           )}
         </section>
 
@@ -359,8 +471,23 @@ export default function Checkout() {
           </div>
           {paymentMethod === "pix_whatsapp" && (
             <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
-              ✅ Após confirmar o pedido, envie o comprovante PIX para:{" "}
-              <strong>(14) 99777-9977</strong>
+              <p className="font-semibold mb-1">Chave PIX (celular)</p>
+              <div className="flex items-center justify-between gap-3">
+                <strong className="text-base">{STORE_INFO.pixKeyLabel}</strong>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(STORE_INFO.pixKey).then(
+                      () => toast.success("Chave PIX copiada"),
+                      () => toast.error("Não foi possível copiar a chave")
+                    );
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-semibold bg-white border border-green-300 rounded-lg px-2.5 py-1.5 hover:bg-green-100"
+                >
+                  <Copy className="w-3.5 h-3.5" /> Copiar
+                </button>
+              </div>
+              <p className="mt-2">Depois de confirmar, envie o comprovante para este WhatsApp.</p>
             </div>
           )}
           {paymentMethod === "cartao" && (
@@ -370,7 +497,23 @@ export default function Checkout() {
           )}
           {paymentMethod === "dinheiro" && (
             <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
-              💵 Tenha o valor exato ou informe o troco necessário nas observações.
+              <label className="font-semibold mb-1 block">Troco para quanto?</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                placeholder="Ex: 50 — deixe vazio para valor exato"
+                value={cashChange}
+                onChange={(e) => setCashChange(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-emerald-200 bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+              {cashChangeValue != null && Number.isFinite(cashChangeValue) && cashChangeValue + 0.001 >= total && (
+                <p className="mt-2">Troco a devolver: <strong>{formatBRL(cashChangeValue - total)}</strong></p>
+              )}
+              {cashInvalid && (
+                <p className="mt-2 text-red-700">O valor precisa ser maior ou igual ao total de {formatBRL(total)}.</p>
+              )}
             </div>
           )}
         </section>
@@ -383,8 +526,7 @@ export default function Checkout() {
           {appliedCoupon ? (
             <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-3 py-2">
               <span className="text-sm font-semibold text-green-700 flex items-center gap-1">
-                <Check className="w-4 h-4" /> {appliedCoupon.code} — -R${" "}
-                {appliedCoupon.discount.toFixed(2)}
+                <Check className="w-4 h-4" /> {appliedCoupon.code} — -{formatBRL(appliedCoupon.discount)}
               </span>
               <button
                 onClick={() => setAppliedCoupon(null)}
@@ -434,7 +576,7 @@ export default function Checkout() {
                 className="flex-1 accent-amber-500"
               />
               <span className="text-sm font-bold text-amber-700 w-28 text-right shrink-0">
-                {usePoints} pts = R$ {pointsDiscount.toFixed(2)}
+                {usePoints} pts = {formatBRL(pointsDiscount)}
               </span>
             </div>
           </section>
@@ -444,7 +586,7 @@ export default function Checkout() {
         <section className="bg-card border border-border rounded-2xl p-5">
           <h2 className="font-display text-lg mb-3">Observações do Pedido</h2>
           <textarea
-            placeholder="Ex: campainha não funciona, ligar ao chegar, troco para R$50..."
+            placeholder="Ex: campainha não funciona, ligar ao chegar, sem cebola..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             className="w-full px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
@@ -478,18 +620,22 @@ export default function Checkout() {
         {/* ── Botão Confirmar ── */}
         <Button
           onClick={handleSubmit}
-          disabled={createOrder.isPending || cartItems.length === 0 || !storeOpen}
+          disabled={createOrder.isPending || cartItems.length === 0 || !storeOpen || !contactReady || needsAddress || cashInvalid}
           className={`w-full font-bold py-4 rounded-xl text-lg ${
-            storeOpen
+            storeOpen && contactReady && !needsAddress && !cashInvalid
               ? "bg-primary text-primary-foreground"
               : "bg-muted text-muted-foreground cursor-not-allowed"
           }`}
         >
           {createOrder.isPending
             ? "Processando..."
-            : storeOpen
-              ? `Confirmar Pedido • R$ ${total.toFixed(2)}`
-              : `Loja fechada · Abre às 19h`}
+            : !storeOpen
+              ? `Loja fechada · ${storeStatus}`
+              : needsAddress
+                ? "Cadastre o endereço de entrega"
+                : !contactReady
+                  ? "Informe nome e telefone"
+                  : `Confirmar Pedido • ${formatBRL(total)}`}
         </Button>
       </div>
     </div>

@@ -11,6 +11,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
+import { formatBRL } from "@shared/format";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; next?: string; nextLabel?: string }> = {
   recebido: { label: "Recebido", color: "bg-blue-100 text-blue-800", next: "em_preparo", nextLabel: "Iniciar Preparo" },
@@ -286,7 +287,7 @@ export default function Admin() {
         <div className="flex flex-col gap-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={ShoppingBag} label="Total de Pedidos" value={stats?.totalOrders ?? 0} color="bg-blue-100 text-blue-600" />
-            <StatCard icon={DollarSign} label="Faturamento" value={`R$ ${(stats?.totalRevenue ?? 0).toFixed(2)}`} color="bg-green-100 text-green-600" />
+            <StatCard icon={DollarSign} label="Faturamento" value={formatBRL(stats?.totalRevenue ?? 0)} color="bg-green-100 text-green-600" />
             <StatCard icon={Clock} label="Pedidos Pendentes" value={stats?.pendingOrders ?? 0} color="bg-orange-100 text-orange-600" />
             <StatCard icon={Package} label="Produtos Ativos" value={stats?.totalProducts ?? 0} color="bg-purple-100 text-purple-600" />
           </div>
@@ -310,7 +311,7 @@ export default function Admin() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cfg?.color}`}>{cfg?.label}</span>
-                      <span className="font-bold text-primary text-sm">R$ {parseFloat(order.total).toFixed(2)}</span>
+                      <span className="font-bold text-primary text-sm">{formatBRL(order.total)}</span>
                     </div>
                   </div>
                 );
@@ -348,7 +349,7 @@ export default function Admin() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cfg?.color}`}>{cfg?.label}</span>
-                      <span className="font-bold text-primary">R$ {parseFloat(order.total).toFixed(2)}</span>
+                      <span className="font-bold text-primary">{formatBRL(order.total)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -359,7 +360,7 @@ export default function Admin() {
                         disabled={updateStatus.isPending}
                         className="bg-primary text-primary-foreground text-xs"
                       >
-                        {cfg.nextLabel}
+                        {cfg.next === "saiu_para_entrega" && parseFloat(order.deliveryFee) === 0 ? "Pronto para retirada" : cfg.nextLabel}
                       </Button>
                     )}
                     {order.status !== "cancelado" && order.status !== "entregue" && (
@@ -373,9 +374,13 @@ export default function Admin() {
                       </Button>
                     )}
                     <span className="text-xs text-muted-foreground ml-auto">
+                      {parseFloat(order.deliveryFee) === 0 ? "Retirada · " : "Entrega · "}
                       {order.paymentMethod === "pix_whatsapp" ? "PIX/WhatsApp" : order.paymentMethod === "cartao" ? "Cartão" : "Dinheiro"}
                     </span>
                   </div>
+                  {order.notes && (
+                    <p className="text-xs text-muted-foreground whitespace-pre-line mt-3">{order.notes}</p>
+                  )}
                 </div>
               );
             })}
@@ -425,7 +430,7 @@ export default function Admin() {
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-primary">R$ {parseFloat(p.price).toFixed(2)}</span>
+                  <span className="font-bold text-primary">{formatBRL(p.price)}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Estoque: {p.stockQty}</span>
                     {p.available ? (
@@ -473,8 +478,8 @@ export default function Admin() {
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{c.description}</p>
                   <p className="text-xs text-muted-foreground">
-                    {c.discountType === "percent" ? `${c.discountValue}% de desconto` : `R$ ${parseFloat(c.discountValue).toFixed(2)} de desconto`}
-                    {parseFloat(c.minOrderValue ?? "0") > 0 && ` • Mínimo R$ ${parseFloat(c.minOrderValue ?? "0").toFixed(2)}`}
+                    {c.discountType === "percent" ? `${c.discountValue}% de desconto` : `${formatBRL(c.discountValue)} de desconto`}
+                    {parseFloat(c.minOrderValue ?? "0") > 0 && ` • Mínimo ${formatBRL(c.minOrderValue ?? "0")}`}
                     {c.maxUses && ` • ${c.usedCount}/${c.maxUses} usos`}
                   </p>
                 </div>

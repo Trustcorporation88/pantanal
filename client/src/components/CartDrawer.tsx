@@ -7,6 +7,7 @@ import { X, Trash2, Plus, Minus, ShoppingBag, ArrowLeft, AlertTriangle } from "l
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { formatBRL } from "@shared/format";
 
 export default function CartDrawer() {
   const { isOpen, closeCart } = useCartContext();
@@ -129,7 +130,7 @@ export default function CartDrawer() {
                         <p className="text-xs text-muted-foreground italic mt-0.5">"{item.observations}"</p>
                       )}
                       <p className="text-sm font-bold text-primary mt-1">
-                        R$ {(unitPrice * item.quantity).toFixed(2)}
+                        {formatBRL(unitPrice * item.quantity)}
                       </p>
                     </div>
                     <div className="flex flex-col items-center gap-2">
@@ -207,7 +208,7 @@ export default function CartDrawer() {
           <div className="p-4 border-t border-border flex flex-col gap-3">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground font-medium">Subtotal</span>
-              <span className="font-bold text-lg text-foreground">R$ {subtotal.toFixed(2)}</span>
+              <span className="font-bold text-lg text-foreground">{formatBRL(subtotal)}</span>
             </div>
             <p className="text-xs text-muted-foreground">Taxa de entrega calculada no checkout</p>
             <Button

@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
+import { formatBRL, formatPhoneBR, phoneDigits } from "@shared/format";
+import { DELIVERY_FEE, isStoreOpen } from "@shared/store";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -152,7 +154,7 @@ const couponRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cupom esgotado." });
       const minVal = parseFloat(coupon.minOrderValue ?? "0");
       if (input.orderValue < minVal)
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Pedido mínimo de R$ ${minVal.toFixed(2)} para este cupom.` });
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Pedido mínimo de ${formatBRL(minVal)} para este cupom.` });
 
       const discountVal = parseFloat(coupon.discountValue);
       const discount =
@@ -183,13 +185,29 @@ const orderRouter = router({
     .input(
       z.object({
         paymentMethod: z.enum(["pix_whatsapp", "cartao", "dinheiro"]),
+        fulfillment: z.enum(["entrega", "retirada"]).default("entrega"),
         addressId: z.number().optional(),
         couponCode: z.string().optional(),
         notes: z.string().optional(),
         usePoints: z.number().min(0).default(0),
+        customerName: z.string().trim().min(2, "Informe seu nome."),
+        customerPhone: z.string().trim().min(8, "Informe um telefone com DDD."),
+        cashChange: z.number().positive().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (!isStoreOpen()) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A loja está fechada no momento. Funcionamos de terça a domingo, das 19h às 23h.",
+        });
+      }
+
+      const contactPhone = formatPhoneBR(input.customerPhone);
+      if (phoneDigits(input.customerPhone).length < 10 || phoneDigits(input.customerPhone).length > 11) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um telefone com DDD." });
+      }
+
       const cartData = await getCartItems(ctx.user.id);
       if (cartData.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Carrinho vazio." });
 
@@ -205,6 +223,7 @@ const orderRouter = router({
         return {
           productId: item.productId,
           productName: product.name,
+          menuNumber: product.menuNumber ?? null,
           productPrice: unitPrice.toFixed(2),
           quantity: item.quantity,
           extras: item.extras,
@@ -215,8 +234,7 @@ const orderRouter = router({
 
       const subtotal = items.reduce((sum, i) => sum + parseFloat(i.itemTotal), 0);
 
-      // Delivery fee based on neighborhood (simplified for Bauru)
-      const deliveryFee = 5.0;
+      const deliveryFee = input.fulfillment === "retirada" ? 0 : DELIVERY_FEE;
 
       // Coupon discount
       let discount = 0;
@@ -241,13 +259,47 @@ const orderRouter = router({
       const total = Math.max(0, subtotal + deliveryFee - discount);
       const pointsEarned = Math.floor(total); // 1 point per R$1
 
-      // Address snapshot
+      if (input.paymentMethod === "dinheiro" && input.cashChange != null && input.cashChange + 0.001 < total) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `O valor para troco precisa ser maior ou igual ao total de ${formatBRL(total)}.`,
+        });
+      }
+
       let addressSnapshot = null;
-      if (input.addressId) {
+      let addressId: number | undefined;
+      if (input.fulfillment === "entrega") {
+        if (!input.addressId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione um endereço de entrega." });
+        }
         const addrs = await getUserAddresses(ctx.user.id);
         const addr = addrs.find((a) => a.id === input.addressId);
-        if (addr) addressSnapshot = addr;
+        if (!addr) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Endereço de entrega não encontrado." });
+        }
+        addressSnapshot = addr;
+        addressId = addr.id;
       }
+
+      const noteLines = [
+        input.fulfillment === "retirada" ? "Retirada na loja" : "Entrega",
+        `Cliente: ${input.customerName.trim()}`,
+        `Telefone: ${contactPhone}`,
+      ];
+      if (input.paymentMethod === "dinheiro") {
+        noteLines.push(
+          input.cashChange
+            ? `Troco para ${formatBRL(input.cashChange)} (devolver ${formatBRL(input.cashChange - total)})`
+            : "Troco: valor exato"
+        );
+      }
+      const customerNotes = input.notes?.trim();
+      const notes = customerNotes ? `${noteLines.join("\n")}\n\nObservações: ${customerNotes}` : noteLines.join("\n");
+
+      await updateUserProfile(ctx.user.id, {
+        name: input.customerName.trim(),
+        phone: contactPhone,
+      });
 
       const orderId = await createOrder({
         userId: ctx.user.id,
@@ -258,12 +310,12 @@ const orderRouter = router({
         total: total.toFixed(2),
         couponId,
         couponCode: input.couponCode,
-        addressId: input.addressId,
+        addressId,
         addressSnapshot,
-        notes: input.notes,
+        notes,
         loyaltyPointsEarned: pointsEarned,
         loyaltyPointsUsed: input.usePoints,
-        items,
+        items: items.map(({ menuNumber: _menuNumber, ...item }) => item),
       });
 
       // Loyalty transactions
@@ -291,7 +343,7 @@ const orderRouter = router({
       // Notify owner
       await notifyOwner({
         title: `🛒 Novo pedido #${orderId}`,
-        content: `Pedido de ${ctx.user.name ?? "cliente"} — R$ ${total.toFixed(2)} — ${input.paymentMethod}`,
+        content: `Pedido de ${input.customerName.trim()} (${contactPhone}) — ${input.fulfillment === "retirada" ? "retirada" : "entrega"} — ${formatBRL(total)} — ${input.paymentMethod}`,
       });
 
       return {
@@ -301,10 +353,15 @@ const orderRouter = router({
         deliveryFee: deliveryFee.toFixed(2),
         discount: discount.toFixed(2),
         paymentMethod: input.paymentMethod,
-        notes: input.notes,
+        fulfillment: input.fulfillment,
+        customerName: input.customerName.trim(),
+        customerPhone: contactPhone,
+        cashChange: input.paymentMethod === "dinheiro" ? input.cashChange ?? null : null,
+        notes: customerNotes ?? null,
         addressSnapshot,
         items: items.map((i) => ({
           productName: i.productName,
+          menuNumber: i.menuNumber,
           quantity: i.quantity,
           itemTotal: i.itemTotal,
           observations: i.observations,

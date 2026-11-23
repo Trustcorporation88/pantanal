@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "wouter";
+import { formatBRL } from "@shared/format";
 
 type Extra = { name: string; price: number };
 
@@ -148,7 +149,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
           <div className="flex items-center justify-between mt-auto pt-2 gap-2">
             <span className="font-display text-lg text-primary font-bold shrink-0">
-              R$ {parseFloat(product.price).toFixed(2)}
+              {formatBRL(product.price)}
             </span>
             <button
               onClick={handleAdd}
@@ -193,7 +194,7 @@ export default function ProductCard({ product }: { product: Product }) {
                         />
                         <span className="text-sm font-medium">{extra.name}</span>
                       </div>
-                      <span className="text-sm text-primary font-semibold">+R$ {extra.price.toFixed(2)}</span>
+                      <span className="text-sm text-primary font-semibold">+{formatBRL(extra.price)}</span>
                     </label>
                   ))}
                 </div>
@@ -237,7 +238,7 @@ export default function ProductCard({ product }: { product: Product }) {
               disabled={addToCart.isPending}
               className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl"
             >
-              {addToCart.isPending ? "Adicionando..." : `Adicionar • R$ ${totalPrice.toFixed(2)}`}
+              {addToCart.isPending ? "Adicionando..." : `Adicionar • ${formatBRL(totalPrice)}`}
             </Button>
           </div>
         </DialogContent>
