@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { formatBRL, formatPhoneBR, phoneDigits } from "@shared/format";
-import { DELIVERY_FEE, isStoreOpen } from "@shared/store";
+import { DELIVERY_FEE, STORE_INFO, isStoreOpen } from "@shared/store";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -199,7 +199,7 @@ const orderRouter = router({
       if (!isStoreOpen()) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "A loja está fechada no momento. Funcionamos de terça a domingo, das 19h às 23h.",
+          message: `A loja está fechada no momento. Funcionamos de ${STORE_INFO.hoursLong}.`,
         });
       }
 

@@ -42,8 +42,8 @@ export default function Footer() {
               <div className="flex items-start gap-2">
                 <Clock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <p>Ter–Dom: 19h às 23h</p>
-                  <p className="text-white/50 text-xs">Fechado às segundas-feiras</p>
+                  <p>Qui–Dom: 19h às 23h</p>
+                  <p className="text-white/50 text-xs">Fechado de segunda a quarta-feira</p>
                 </div>
               </div>
             </div>

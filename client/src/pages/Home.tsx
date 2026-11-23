@@ -36,7 +36,7 @@ export default function Home() {
             <AlertCircle className="w-4 h-4 shrink-0" />
             <p className="text-sm font-medium">
               <span className="font-bold">Loja fechada no momento.</span>{" "}
-              {storeStatus} · Funcionamos de terça a domingo, das 19h às 23h.
+              {storeStatus} · Funcionamos de {STORE_INFO.hoursLong}.
             </p>
           </div>
         </div>
@@ -128,8 +128,8 @@ export default function Home() {
               </div>
               <div>
                 <p className="font-bold text-sm text-foreground">Horário de Funcionamento</p>
-                <p className="text-sm text-muted-foreground">Terça a Domingo · 19h às 23h</p>
-                <p className="text-xs text-muted-foreground">Fechado às segundas-feiras</p>
+                <p className="text-sm text-muted-foreground">Quinta a Domingo · 19h às 23h</p>
+                <p className="text-xs text-muted-foreground">{STORE_INFO.closedDays}</p>
               </div>
             </div>
 

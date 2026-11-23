@@ -9,13 +9,20 @@ describe("store hours", () => {
     expect(getStoreStatusMessage(mondayEvening)).toBe("Fechado hoje (segunda-feira)");
   });
 
-  it("opens Tuesday at 19h and closes at 23h", () => {
-    expect(isStoreOpen(new Date("2026-11-24T21:59:00Z"))).toBe(false);
-    expect(getStoreStatusMessage(new Date("2026-11-24T21:00:00Z"))).toBe("Abre às 19h");
-    expect(isStoreOpen(new Date("2026-11-24T22:00:00Z"))).toBe(true);
-    expect(isStoreOpen(new Date("2026-11-25T01:59:00Z"))).toBe(true);
-    expect(isStoreOpen(new Date("2026-11-25T02:00:00Z"))).toBe(false);
-    expect(getStoreStatusMessage(new Date("2026-11-25T02:00:00Z"))).toBe("Fechado por hoje");
+  it("stays closed Tuesday and Wednesday", () => {
+    expect(isStoreOpen(new Date("2026-11-24T22:30:00Z"))).toBe(false);
+    expect(getStoreStatusMessage(new Date("2026-11-24T22:30:00Z"))).toBe("Fechado hoje (terça-feira)");
+    expect(isStoreOpen(new Date("2026-11-25T22:30:00Z"))).toBe(false);
+    expect(getStoreStatusMessage(new Date("2026-11-25T22:30:00Z"))).toBe("Fechado hoje (quarta-feira)");
+  });
+
+  it("opens Thursday at 19h and closes at 23h", () => {
+    expect(isStoreOpen(new Date("2026-11-26T21:59:00Z"))).toBe(false);
+    expect(getStoreStatusMessage(new Date("2026-11-26T21:00:00Z"))).toBe("Abre às 19h");
+    expect(isStoreOpen(new Date("2026-11-26T22:00:00Z"))).toBe(true);
+    expect(isStoreOpen(new Date("2026-11-27T01:59:00Z"))).toBe(true);
+    expect(isStoreOpen(new Date("2026-11-27T02:00:00Z"))).toBe(false);
+    expect(getStoreStatusMessage(new Date("2026-11-27T02:00:00Z"))).toBe("Fechado por hoje");
   });
 });
 

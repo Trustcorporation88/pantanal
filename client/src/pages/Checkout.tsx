@@ -195,7 +195,7 @@ export default function Checkout() {
 
   const handleSubmit = () => {
     if (!storeOpen) {
-      toast.error(`${getStoreStatusMessage()}. Funcionamos de terça a domingo, das 19h às 23h.`);
+      toast.error(`${getStoreStatusMessage()}. Funcionamos de ${STORE_INFO.hoursLong}.`);
       return;
     }
     if (!contactReady) {
@@ -600,7 +600,7 @@ export default function Checkout() {
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold mb-1">Loja fechada no momento</p>
-              <p>{storeStatus} · Funcionamos de <strong>terça a domingo, das 19h às 23h</strong>.</p>
+              <p>{storeStatus} · Funcionamos de <strong>{STORE_INFO.hoursLong}</strong>.</p>
               <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
                 <Clock className="w-3 h-3" /> Você pode montar seu pedido agora e confirmar quando abrirmos!
               </p>
